@@ -1,0 +1,10 @@
+secrets.txt
+.DS_Store
+build
+.gradle/*
+docker/postgres-data/
+docker/docker-compose-build.yml
+docker/*.env
+.project
+.settings/
+/.gradle/

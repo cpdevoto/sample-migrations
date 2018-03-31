@@ -1,0 +1,1 @@
+FROM shrinedevelopment-docker-ext.jfrog.io/postgres:9.5

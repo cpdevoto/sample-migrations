@@ -1,0 +1,18 @@
+version: '2'
+services:
+  db:
+    build:
+      context: .
+      dockerfile: postgres.Dockerfile
+    image: postgres-schema-local
+    ports:
+      - '5433:5432'
+  migrations-app:
+    build: ../
+    image: migrations-app-local
+    volumes:
+      - ../:/var/www/migrations-app
+    env_file:
+      - local.env
+    links:
+      - db

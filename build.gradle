@@ -1,0 +1,94 @@
+buildscript {
+    repositories {
+        maven {
+            url "${shrine_artifactory_contextUrl}" + '/repo'
+            credentials {
+                username = "${shrine_artifactory_user}"
+                password = "${shrine_artifactory_password}"
+            }
+        }
+
+        dependencies {
+            classpath "com.shrinedev:GradleCommonConfigurationPlugin:1.0.+"
+        }
+    }
+}
+
+group = 'shrinedev'
+
+apply plugin: 'base'
+apply plugin: 'shrine-common-config'
+
+shrineDocker {
+    artifacts = [
+        'postgres-schema',
+        'migrations-app'
+    ]
+}
+
+def dockerComposeFile = project.file("docker/docker-compose-build.yml")
+def localEnv = project.file('docker/local.env')
+
+task clean << {
+    logger.quiet("Deleting ${dockerComposeFile.absolutePath}")
+    delete "${dockerComposeFile.absolutePath}"
+
+}
+
+build << {
+        if (!localEnv.exists()) {
+          logger.quiet('Creating docker/local.env')
+          copy {
+            from 'docker/local.env.example'
+            into 'docker'
+            rename { 'local.env' }
+          }
+        }
+
+        dockerComposeFile.text = """\
+version: '2'
+services:
+  db:
+    build:
+      context: .
+      dockerfile: postgres.Dockerfile
+    image: ${dockerHost}/postgres-schema
+    container_name: postgres-schema
+  migrations-app:
+    build: ../
+    image: ${dockerHost}/migrations-app
+    env_file:
+      - local.env
+    links:
+      - db
+    container_name: migrations-app
+    command: ['docker/migrate-postgres.sh', 'db']
+"""
+
+        logger.quiet("docker-compose -f ${dockerComposeFile.absolutePath} kill || true")
+        exec {
+            commandLine "/bin/bash", "-c", "docker-compose -f ${dockerComposeFile.absolutePath} kill || true"
+        }
+
+        logger.quiet("docker-compose -f ${dockerComposeFile.absolutePath} rm -f || true")
+        exec {
+            commandLine "/bin/bash", "-c", "docker-compose -f ${dockerComposeFile.absolutePath} rm -f || true"
+        }
+
+/*
+        logger.quiet("docker rmi -f \$(docker images ${dockerHost}/postgres-schema) || true")
+        exec {
+            commandLine "/bin/bash", "-c", "docker rmi -f \$(docker images ${dockerHost}/postgres-schema -q) || true"
+        }
+*/
+        logger.quiet("docker-compose -f ${dockerComposeFile.absolutePath} up --build --abort-on-container-exit")
+        exec {
+            commandLine "/bin/bash", "-c", "docker-compose -f ${dockerComposeFile.absolutePath} up --build --abort-on-container-exit"
+        }
+
+        logger.quiet("docker commit postgres-schema ${dockerHost}/postgres-schema")
+        exec {
+            commandLine "/bin/bash", "-c", "docker commit postgres-schema ${dockerHost}/postgres-schema"
+        }
+
+}
